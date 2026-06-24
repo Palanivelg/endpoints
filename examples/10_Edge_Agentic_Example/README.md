@@ -132,6 +132,37 @@ docker run --rm -it --gpus all \
 
 </details>
 
+<details><summary>Other validated edge devices (NVIDIA GB10, AMD Strix Halo)</summary>
+
+The harness is hardware-agnostic; only the `llama.cpp` build target changes per
+device. Both configs below were validated end-to-end (single-turn + multi-turn)
+against the Thor reference.
+
+**NVIDIA DGX Spark GB10 (sm_121, CUDA 13).** Build from source, then serve with
+the same flags as the Thor section above:
+
+```bash
+cmake -B build -DGGML_CUDA=ON -DCMAKE_CUDA_ARCHITECTURES=121   # GB10 = sm_121 (cc 12.1)
+cmake --build build --config Release -j --target llama-server
+```
+
+**AMD Strix Halo (gfx1151, native ROCm/HIP).** Build with HIP and rocWMMA flash
+attention, then set `ROCBLAS_USE_HIPBLASLT=1` when serving:
+
+```bash
+cmake -B build -DGGML_HIP=ON -DGPU_TARGETS=gfx1151 \
+      -DGGML_HIP_NO_VMM=ON -DGGML_HIP_ROCWMMA_FATTN=ON
+cmake --build build --config Release -j --target llama-server
+# serve: ROCBLAS_USE_HIPBLASLT=1 ./build/bin/llama-server --model ...   (Thor flags)
+```
+
+> Reproducibility note: at `temperature 0`, single-turn accuracy can drift past
+> the 1% accuracy gate purely from differing `llama.cpp` build versions, even
+> with identical config, model, and seed. For exact cross-submitter 1:1, build
+> from a pinned `llama.cpp` commit.
+
+</details>
+
 ---
 
 ## Step 1 — Install
