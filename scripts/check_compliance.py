@@ -20,7 +20,8 @@ Validates config-lock (deterministic/single-stream settings), the accuracy gate,
 and run-validity rules. Exits 0 if all checks pass, 1 otherwise.
 
 Usage:
-    python scripts/check_compliance.py REPORT_DIR [REPORT_DIR ...]
+    python scripts/check_compliance.py REPORT_DIR [REPORT_DIR ...] \\
+        --ruleset RULESET --model MODEL
     python scripts/check_compliance.py results/edge_agentic_full_run \\
         --ruleset mlperf-edge-current --model qwen3.6-27b
 """
@@ -42,13 +43,13 @@ def main() -> int:
     )
     parser.add_argument(
         "--ruleset",
-        default="mlperf-edge-current",
-        help="Registered ruleset name (default: mlperf-edge-current).",
+        required=True,
+        help="Registered ruleset name (e.g. mlperf-edge-current).",
     )
     parser.add_argument(
         "--model",
-        default="qwen3.6-27b",
-        help="Model name within the ruleset (default: qwen3.6-27b).",
+        required=True,
+        help="Model name within the ruleset (e.g. qwen3.6-27b).",
     )
     args = parser.parse_args()
 

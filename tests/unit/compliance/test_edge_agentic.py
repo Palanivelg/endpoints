@@ -24,8 +24,8 @@ from inference_endpoint.compliance import (
 )
 from inference_endpoint.config.rulesets.mlcommons import models
 
-GOLDEN = {"bfcl_overall_accuracy": 86.23, "bfcl_normalized_accuracy": 87.96}
-FACTORS = {"bfcl_overall_accuracy": (0.97,), "bfcl_normalized_accuracy": (0.97,)}
+GOLDEN = {"overall_accuracy": 86.23, "normalized_single_turn_score": 87.96}
+FACTORS = {"overall_accuracy": (0.97,), "normalized_single_turn_score": (0.97,)}
 
 
 def _passing_config() -> dict:
@@ -143,9 +143,9 @@ def test_accuracy_gate_fails_below_threshold():
 
 @pytest.mark.unit
 def test_accuracy_gate_fails_when_no_metric_applies():
-    # A score is present but the golden/factor tables carry no key that
-    # intersects _ACCURACY_METRIC_KEYS: the loop appends zero accuracy checks,
-    # so without the explicit guard the gate would silently PASS. It must FAIL.
+    # A score is present but the golden/factor tables are empty, so no accuracy
+    # metric applies: the loop appends zero accuracy checks, so without the
+    # explicit guard the gate would silently PASS. It must FAIL.
     checks = check_accuracy(_accuracy_results(86.23, 87.96, 995), {}, {}, None)
     applicable = next(c for c in checks if c.name == "accuracy_metric_applicable")
     assert not applicable.passed
@@ -193,7 +193,7 @@ def test_check_submission_accuracy_dir_string_scores(tmp_path):
     # End-to-end with string-valued breakdown metrics (defensive coercion path).
     _write_valid_config(tmp_path)
     _write_accuracy_results(tmp_path, _accuracy_results("86.23", "87.96", 995))
-    report = check_submission(tmp_path)
+    report = check_submission(tmp_path, "mlperf-edge-current", "qwen3.6-27b")
     assert report.passed
 
 
@@ -222,8 +222,8 @@ def test_accuracy_gate_accepts_non_bfcl_breakdown():
             }
         ]
     }
-    golden = {"bfcl_overall_accuracy": 82.0}
-    factors = {"bfcl_overall_accuracy": (0.97,)}
+    golden = {"overall_accuracy": 82.0}
+    factors = {"overall_accuracy": (0.97,)}
     checks = check_accuracy(results, golden, factors, 1000)
 
     overall = next(c for c in checks if c.name == "accuracy:overall_accuracy")
@@ -247,8 +247,8 @@ def test_accuracy_gate_reports_missing_when_no_overall_anywhere():
             }
         ]
     }
-    golden = {"bfcl_overall_accuracy": 82.0}
-    factors = {"bfcl_overall_accuracy": (0.97,)}
+    golden = {"overall_accuracy": 82.0}
+    factors = {"overall_accuracy": (0.97,)}
     checks = check_accuracy(results, golden, factors, None)
 
     overall = next(c for c in checks if c.name == "accuracy:overall_accuracy")
@@ -285,7 +285,7 @@ def test_perf_validity_fails_with_dropped_turns():
 def test_check_submission_accuracy_dir(tmp_path):
     _write_valid_config(tmp_path)
     _write_accuracy_results(tmp_path, _accuracy_results(86.23, 87.96, 995))
-    report = check_submission(tmp_path)
+    report = check_submission(tmp_path, "mlperf-edge-current", "qwen3.6-27b")
     assert report.passed
     assert report.notes  # server-side attestation surfaced
     names = {c.name for c in report.checks}
@@ -308,7 +308,7 @@ def test_check_submission_perf_dir(tmp_path):
             }
         )
     )
-    report = check_submission(tmp_path)
+    report = check_submission(tmp_path, "mlperf-edge-current", "qwen3.6-27b")
     assert report.passed
     assert "no_dropped_turns" in {c.name for c in report.checks}
 
@@ -319,16 +319,16 @@ def test_check_submission_uses_ruleset_thresholds(tmp_path):
     model = models.Qwen3_6_27B
     _, golden = model.golden_accuracy
     (factors,) = model.accuracy_target_settings
-    threshold = golden["bfcl_overall_accuracy"] * factors["bfcl_overall_accuracy"][0]
+    threshold = golden["overall_accuracy"] * factors["overall_accuracy"][0]
     assert threshold == pytest.approx(83.6431)
 
     _write_valid_config(tmp_path)
     _write_accuracy_results(tmp_path, _accuracy_results(83.0, 87.0, 995))
-    report = check_submission(tmp_path)
+    report = check_submission(tmp_path, "mlperf-edge-current", "qwen3.6-27b")
     assert not report.passed
 
 
 @pytest.mark.unit
 def test_check_submission_missing_artifacts(tmp_path):
-    report = check_submission(tmp_path)
+    report = check_submission(tmp_path, "mlperf-edge-current", "qwen3.6-27b")
     assert not report.passed

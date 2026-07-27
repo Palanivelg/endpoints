@@ -18,8 +18,8 @@
 A submission is a run's report directory containing the resolved ``config.yaml``
 plus the scorer outputs (``accuracy/accuracy_results.json`` for the accuracy run,
 ``scores.json`` for the agentic performance run). The checker compares those
-artifacts against a
-registered ruleset (default: ``mlperf-edge-current`` / ``qwen3.6-27b``):
+artifacts against the caller-supplied registered ruleset and model (e.g.
+``mlperf-edge-current`` / ``qwen3.6-27b``):
 
 * config-lock — deterministic, single-stream settings the rules require;
 * accuracy gate — ``score >= factor x reference`` from the model's
@@ -51,9 +51,6 @@ from ..evaluation.accuracy_results import (
 )
 from ..evaluation.accuracy_results import (
     to_float as _to_float,
-)
-from ..evaluation.bfcl_v4_metrics import (
-    ACCURACY_METRIC_KEYS as _ACCURACY_METRIC_KEYS,
 )
 
 
@@ -188,8 +185,8 @@ def check_accuracy(
         return [Check("accuracy_results_present", False, "no accuracy score found")]
 
     applicable_metrics = 0
-    for golden_key, result_key in _ACCURACY_METRIC_KEYS.items():
-        if golden_key not in golden or golden_key not in factors:
+    for result_key in golden:
+        if result_key not in factors:
             continue
         applicable_metrics += 1
         measured = _to_float(block.get(result_key))
@@ -207,13 +204,13 @@ def check_accuracy(
                 Check(f"accuracy:{result_key}", False, "metric missing or non-numeric")
             )
             continue
-        factor = factors[golden_key][0]
-        threshold = golden[golden_key] * factor
+        factor = factors[result_key][0]
+        threshold = golden[result_key] * factor
         checks.append(
             Check(
                 f"accuracy:{result_key}",
                 measured >= threshold,
-                f"{measured:.2f} >= {threshold:.2f} (={factor} x {golden[golden_key]})",
+                f"{measured:.2f} >= {threshold:.2f} (={factor} x {golden[result_key]})",
             )
         )
 
@@ -272,8 +269,8 @@ def check_perf_validity(scores: dict[str, Any]) -> list[Check]:
 
 def check_submission(
     report_dir: str | Path,
-    ruleset_name: str = "mlperf-edge-current",
-    model_name: str = "qwen3.6-27b",
+    ruleset_name: str,
+    model_name: str,
 ) -> ComplianceReport:
     """Run all applicable compliance checks against a run's report directory."""
     report_dir = Path(report_dir)

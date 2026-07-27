@@ -35,12 +35,12 @@ accuracy summary written into benchmark results
 
 ## Files
 
-| File             | Purpose                                                                                                                                      |
-| ---------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| `extractor.py`   | Extracts model answer from raw text (regex, boxed-answer parsing)                                                                            |
-| `scoring.py`     | Compares extracted answer to ground truth label                                                                                              |
-| `bfcl_v4_*.py`   | BFCL v4 function-calling eval: `bfcl_v4_execution.py`, `bfcl_v4_scorer.py`, `bfcl_v4_metrics.py`, and the multi-turn `runner`/`scorer`/`cli` |
-| `livecodebench/` | LiveCodeBench-specific code execution pipeline                                                                                               |
+| File             | Purpose                                                                                                                |
+| ---------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `extractor.py`   | Extracts model answer from raw text (regex, boxed-answer parsing)                                                      |
+| `scoring.py`     | Compares extracted answer to ground truth label                                                                        |
+| `bfcl_v4_*.py`   | BFCL v4 function-calling eval: `bfcl_v4_execution.py`, `bfcl_v4_scorer.py`, and the multi-turn `runner`/`scorer`/`cli` |
+| `livecodebench/` | LiveCodeBench-specific code execution pipeline                                                                         |
 
 ## LiveCodeBench
 

@@ -48,9 +48,6 @@ from ..evaluation.accuracy_results import (
 from ..evaluation.accuracy_results import (
     to_float as _to_float,
 )
-from ..evaluation.bfcl_v4_metrics import (
-    ACCURACY_METRIC_KEYS as _ACCURACY_METRIC_KEYS,
-)
 
 logger = logging.getLogger(__name__)
 
@@ -275,9 +272,9 @@ def _accuracy_gate(ruleset_name: str, model_name: str) -> dict[str, float]:
     _, golden = model.golden_accuracy
     factors = model.accuracy_target_settings[0]
     thresholds = {}
-    for golden_key, result_key in _ACCURACY_METRIC_KEYS.items():
-        if golden_key in golden and golden_key in factors:
-            thresholds[result_key] = golden[golden_key] * factors[golden_key][0]
+    for key in golden:
+        if key in factors:
+            thresholds[key] = golden[key] * factors[key][0]
     return thresholds
 
 

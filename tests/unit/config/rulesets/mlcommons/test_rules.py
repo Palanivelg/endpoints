@@ -193,14 +193,14 @@ def test_edge_model_accuracy_gate():
 
     precision, golden = model.golden_accuracy
     assert precision == "q4_k_m-reference"
-    assert golden["bfcl_overall_accuracy"] == pytest.approx(86.23)
-    assert golden["bfcl_normalized_accuracy"] == pytest.approx(87.96)
+    assert golden["overall_accuracy"] == pytest.approx(86.23)
+    assert golden["normalized_single_turn_score"] == pytest.approx(87.96)
 
     # 3% one-sided band: pass if score >= 0.97 x reference -> overall gate ~83.64%.
     (settings,) = model.accuracy_target_settings
-    (overall_factor,) = settings["bfcl_overall_accuracy"]
+    (overall_factor,) = settings["overall_accuracy"]
     assert overall_factor == 0.97
-    assert golden["bfcl_overall_accuracy"] * overall_factor == pytest.approx(83.6431)
+    assert golden["overall_accuracy"] * overall_factor == pytest.approx(83.6431)
 
 
 @pytest.mark.unit

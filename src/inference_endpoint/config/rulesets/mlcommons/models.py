@@ -158,10 +158,10 @@ Qwen3_6_27B = _Model(
     "qwen3.6-27b",
     golden_accuracy=(
         "q4_k_m-reference",
-        {"bfcl_overall_accuracy": 86.23, "bfcl_normalized_accuracy": 87.96},
+        {"overall_accuracy": 86.23, "normalized_single_turn_score": 87.96},
     ),
     accuracy_target_settings=[
-        {"bfcl_overall_accuracy": (0.97,), "bfcl_normalized_accuracy": (0.97,)}
+        {"overall_accuracy": (0.97,), "normalized_single_turn_score": (0.97,)}
     ],
     dataset=datasets.BFCLv4SingleTurn,
 )

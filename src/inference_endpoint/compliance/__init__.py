@@ -18,7 +18,7 @@
 Audit framework: AuditTest protocol + AuditRunSpec/AuditRunArtifacts types +
 test registry, run via ``commands/audit.py:run_audit``.
 
-Submission checker (``checker.py``): validates a completed run's report
+Submission checker (``edge_agentic.py``): validates a completed run's report
 directory against a registered ruleset — config-lock (deterministic/
 single-stream settings), the accuracy gate, and run-validity rules (e.g. 0
 dropped turns for the agentic performance run).
@@ -102,7 +102,7 @@ def get_audit_test(test_id: AuditTestId) -> AuditTest:
 # package; importing at the top would be circular. This is module-scope wiring,
 # not a lazy in-function import.
 from .audit_test.output_caching_test import OutputCachingAudit  # noqa: E402
-from .checker import (  # noqa: E402
+from .edge_agentic import (  # noqa: E402
     Check,
     ComplianceReport,
     check_accuracy,
