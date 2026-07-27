@@ -21,7 +21,11 @@ from inference_endpoint.core.types import Query, QueryResult, TextModelOutput
 from inference_endpoint.endpoint_client.adapter_protocol import HttpRequestAdapter
 
 from ..config.schema import ModelParams, StreamingMode
-from ..dataset_manager.transforms import AddStaticColumns, ColumnFilter, Transform
+from ..dataset_manager.transforms import (
+    AddStaticColumns,
+    SchemaAwareColumnFilter,
+    Transform,
+)
 from .openai_types_gen import (
     ChatCompletionResponseMessage,
     Choice,
@@ -58,10 +62,13 @@ class OpenAIAdapter(HttpRequestAdapter):
             "frequency_penalty": model_params.frequency_penalty,
         }
 
+        # to_endpoint_request accepts either a pre-built "messages" array or a
+        # single "prompt" string; project to whichever the frame carries.
+        # "messages" is preferred when present.
         return [
-            ColumnFilter(
-                required_columns=["prompt"],
-                optional_columns=["system", "tools"],
+            SchemaAwareColumnFilter(
+                required_any=[["messages"], ["prompt"]],
+                optional_columns=["system", "messages", "tools", "tool_choice"],
             ),
             AddStaticColumns(metadata),
         ]

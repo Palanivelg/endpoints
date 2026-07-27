@@ -258,12 +258,90 @@ class ColumnFilter(Transform):
         Returns:
             DataFrame with filtered columns
         """
-        columns_to_keep = self.required_columns
+        # Build a fresh list (never mutate self.required_columns in place) and
+        # preserve the caller-declared order (required first, then optional in
+        # declaration order) so the projection is deterministic across calls.
+        columns_to_keep = list(self.required_columns)
         if self.optional_columns is not None:
-            found_cols = set(df.columns) & set(self.optional_columns)
-            columns_to_keep += list(found_cols)
+            columns_to_keep += [
+                col for col in self.optional_columns if col in df.columns
+            ]
 
         # Filter the columns
+        df = df[columns_to_keep]
+        return df
+
+
+class SchemaAwareColumnFilter(Transform):
+    """Project a frame down to whichever request schema it actually carries.
+
+    An endpoint may accept more than one input schema (e.g. the OpenAI chat API
+    accepts either a single ``prompt`` string or a pre-built ``messages`` array).
+    A plain :class:`ColumnFilter` hard-codes one required schema and dies with a
+    pandas ``KeyError`` on frames that use the other one. This transform instead
+    inspects the frame at apply time and keeps the first fully-present group.
+
+    Invariant: exactly one of ``required_any`` groups is used per frame. Groups
+    are tried in order, so list the preferred schema first (e.g. ``messages``
+    before ``prompt``). The kept columns are the chosen group's columns (in the
+    group's declared order) followed by every ``optional_columns`` entry present
+    in the frame (in declaration order); ``optional_columns`` that also appear in
+    the chosen group are not duplicated. If no group is fully present, a
+    ``ValueError`` naming the frame's columns is raised.
+    """
+
+    def __init__(
+        self,
+        required_any: list[list[str]],
+        optional_columns: list[str] | None = None,
+    ):
+        """Initialize the SchemaAwareColumnFilter transform.
+
+        Args:
+            required_any: Alternative required-column groups, tried in order. The
+                first group whose columns are all present in the frame is kept.
+            optional_columns: Column names to additionally keep when present.
+        """
+        if not required_any or any(not group for group in required_any):
+            raise ValueError(
+                "required_any must be a non-empty list of non-empty groups"
+            )
+        self.required_any = required_any
+        self.optional_columns = optional_columns
+
+    def __call__(self, df: pd.DataFrame) -> pd.DataFrame:
+        """Project the DataFrame onto the first matching required schema.
+
+        Args:
+            df: Input DataFrame
+
+        Returns:
+            DataFrame with only the chosen schema's columns plus present optionals
+
+        Raises:
+            ValueError: If none of the ``required_any`` groups is fully present.
+        """
+        frame_cols = set(df.columns)
+        chosen: list[str] | None = None
+        for group in self.required_any:
+            if all(col in frame_cols for col in group):
+                chosen = group
+                break
+        if chosen is None:
+            raise ValueError(
+                "No required column group is fully present in the frame. "
+                f"Expected all columns of one of {self.required_any}; "
+                f"frame has columns {sorted(frame_cols)}."
+            )
+
+        columns_to_keep = list(chosen)
+        if self.optional_columns is not None:
+            columns_to_keep += [
+                col
+                for col in self.optional_columns
+                if col in frame_cols and col not in chosen
+            ]
+
         df = df[columns_to_keep]
         return df
 

@@ -20,24 +20,19 @@ is minimal -- it passes through the messages/tools columns directly rather
 than formatting a single prompt string.
 """
 
-from inference_endpoint.dataset_manager.transforms import (
-    ColumnFilter,
-    Transform,
-)
+from inference_endpoint.dataset_manager.transforms import Transform
 
 
 def function_calling() -> list[Transform]:
     """Default transform for function-calling evaluation.
 
-    Passes through pre-formatted messages, tools, and tool_choice columns directly.
-    The OpenAI adapter will use these to construct the request with tool definitions.
+    No dataset-side projection is needed: the OpenAI adapter's schema-aware
+    projection detects the pre-formatted messages/tools/tool_choice columns and
+    keeps them (preferring the "messages" schema over "prompt"), then uses them
+    to construct the request with tool definitions.
 
     tool_choice is set to "auto" on each row (see BFCLv4._process_sample). Sending
     it explicitly avoids server-default ambiguity: some servers stall when tools are
     present but tool_choice is omitted.
     """
-    return [
-        ColumnFilter(
-            required_columns=["messages", "tools", "tool_choice"],
-        ),
-    ]
+    return []

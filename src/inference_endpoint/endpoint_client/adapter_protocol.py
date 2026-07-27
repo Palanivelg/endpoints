@@ -55,12 +55,14 @@ class HttpRequestAdapter(ABC):
         """Returns a list of transforms to apply to the dataset such that each row,
         when converted to a dictionary, can be used as the `.data` field of a Query.
 
-        It is expected that these transforms will be applied after other transforms,
-        such that the input dataframe will contain a column `prompt` (and optionally
-        `system`). There can be any arbitrary number of extraneous columns in the
-        dataframe, which must be filtered out. As such, all adapter dataset transforms
-        should include a `ColumnFilter` transform to ensure that when a row is converted
-        to a dictionary, only the necessary keys are present.
+        These transforms are applied after any dataset-provided transforms. The
+        input dataframe carries whichever request schema the dataset uses (e.g. a
+        single `prompt` string, or a pre-built `messages` array plus `tools`), and
+        may contain arbitrary extraneous columns that must be filtered out. Adapters
+        that accept multiple schemas should project with a schema-aware filter
+        (e.g. `SchemaAwareColumnFilter`) so the correct columns survive regardless
+        of which schema the frame carries, leaving only the necessary keys when a
+        row is converted to a dictionary.
 
         Args:
             model_params: The model parameters for the endpoint to use

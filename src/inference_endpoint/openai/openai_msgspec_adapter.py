@@ -25,7 +25,7 @@ from inference_endpoint.config.schema import ModelParams, StreamingMode
 from inference_endpoint.core.types import Query, QueryResult, TextModelOutput
 from inference_endpoint.dataset_manager.transforms import (
     AddStaticColumns,
-    ColumnFilter,
+    SchemaAwareColumnFilter,
     Transform,
 )
 
@@ -104,8 +104,14 @@ class OpenAIMsgspecAdapter(HttpRequestAdapter):
             "user",
             "chat_template",
         ]
+        # Chat completions accept either a pre-built "messages" array (e.g. the
+        # BFCL function-calling schema) or a single "prompt" string; project to
+        # whichever the frame carries. "messages" is preferred when present.
         return [
-            ColumnFilter(required_columns=["prompt"], optional_columns=allowed),
+            SchemaAwareColumnFilter(
+                required_any=[["messages"], ["prompt"]],
+                optional_columns=allowed,
+            ),
             AddStaticColumns(metadata),
         ]
 

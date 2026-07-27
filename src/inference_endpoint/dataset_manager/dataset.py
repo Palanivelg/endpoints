@@ -31,7 +31,6 @@ from datasets import load_dataset, load_from_disk
 
 from ..config.schema import APIType, ModelParams
 from .transforms import (
-    ColumnFilter,
     Transform,
     apply_transforms,
     get_transforms_for_api_type,
@@ -389,23 +388,13 @@ class Dataset:
         else:
             adapter_transforms = []
 
-        # A ColumnFilter projects the frame down to the columns the API path
-        # expects. The adapter's default filter assumes a single "prompt"
-        # column, which is wrong for datasets whose schema is "messages"+"tools"
-        # (e.g. the BFCL function-calling presets): running it would drop the
-        # columns those datasets need. When the dataset already supplies its own
-        # ColumnFilter (the authoritative projection for its schema), we drop
-        # ONLY the adapter's ColumnFilter and still apply every other adapter
-        # transform (Harmonize, tokenization, etc.), so behavior is unchanged
-        # apart from which columns survive the projection.
-        has_user_column_filter = any(isinstance(t, ColumnFilter) for t in transforms)
-        for t in adapter_transforms:
-            if has_user_column_filter and isinstance(t, ColumnFilter):
-                self.logger.debug(
-                    "Skipping adapter ColumnFilter (preset already provides one)"
-                )
-                continue
-            transforms.append(t)
+        # Adapter transforms run after any dataset-provided ones. The adapter's
+        # projection is schema-aware (SchemaAwareColumnFilter): it inspects the
+        # frame and keeps whichever request schema it carries (single "prompt"
+        # string or a pre-built "messages" array, e.g. the BFCL function-calling
+        # presets), so datasets no longer need to supply their own projection to
+        # avoid losing columns.
+        transforms.extend(adapter_transforms)
 
         if transforms:
             df = apply_transforms(df, transforms)

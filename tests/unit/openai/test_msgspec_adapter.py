@@ -359,3 +359,79 @@ def test_dataset_transforms_preserve_chat_template_kwargs_dict():
     request = OpenAIMsgspecAdapter.to_endpoint_request(Query(id="q5", data=row))
     payload = json.loads(msgspec.json.encode(request))
     assert payload["chat_template_kwargs"] == chat_template_kwargs
+
+
+@pytest.mark.unit
+def test_dataset_transforms_project_prompt_schema():
+    """A prompt-schema frame projects to prompt(+system)+metadata."""
+    from inference_endpoint.config.schema import ModelParams
+
+    mp = ModelParams(name="test-model")
+    df = pd.DataFrame({"prompt": ["hi"], "system": ["sys"], "extra": ["drop-me"]})
+    for transform in OpenAIMsgspecAdapter.dataset_transforms(mp):
+        df = transform(df)
+
+    cols = set(df.columns)
+    assert {"prompt", "system"} <= cols
+    assert "extra" not in cols
+    # metadata (from AddStaticColumns) survives the projection
+    assert df["model"].iloc[0] == "test-model"
+
+
+@pytest.mark.unit
+def test_dataset_transforms_project_messages_schema_without_preset():
+    """A messages-schema frame (no preset ColumnFilter) projects without raising.
+
+    Regression for #388: a messages/tools/tool_choice frame loaded without a
+    preset filter must not hit the old required_columns=["prompt"] KeyError.
+    """
+    from inference_endpoint.config.schema import ModelParams
+
+    mp = ModelParams(name="test-model")
+    df = pd.DataFrame(
+        {
+            "messages": [[{"role": "user", "content": "hi"}]],
+            "tools": [[{"type": "function", "function": {"name": "f"}}]],
+            "tool_choice": ["auto"],
+            "extra": ["drop-me"],
+        }
+    )
+    for transform in OpenAIMsgspecAdapter.dataset_transforms(mp):
+        df = transform(df)
+
+    cols = set(df.columns)
+    assert {"messages", "tools", "tool_choice"} <= cols
+    assert "extra" not in cols
+    assert df["model"].iloc[0] == "test-model"
+
+    # messages/tools survive all the way to the endpoint request.
+    row = df.to_dict(orient="records")[0]
+    request = OpenAIMsgspecAdapter.to_endpoint_request(Query(id="q-bfcl", data=row))
+    payload = json.loads(msgspec.json.encode(request))
+    assert payload["messages"][0]["content"] == "hi"
+    assert payload["tools"][0]["function"]["name"] == "f"
+    assert payload["tool_choice"] == "auto"
+
+
+@pytest.mark.unit
+def test_dataset_transforms_neither_schema_raises():
+    """A frame with neither prompt nor messages raises a clear error."""
+    from inference_endpoint.config.schema import ModelParams
+
+    mp = ModelParams(name="test-model")
+    df = pd.DataFrame({"foo": [1], "bar": [2]})
+    with pytest.raises(ValueError, match="required column group"):
+        for transform in OpenAIMsgspecAdapter.dataset_transforms(mp):
+            df = transform(df)
+
+
+@pytest.mark.unit
+def test_bfcl_preset_no_longer_supplies_column_filter():
+    """The BFCL function_calling preset relies on the adapter's projection."""
+    from inference_endpoint.dataset_manager.predefined.bfcl_v4.presets import (
+        function_calling,
+    )
+    from inference_endpoint.dataset_manager.transforms import ColumnFilter
+
+    transforms = function_calling()
+    assert not any(isinstance(t, ColumnFilter) for t in transforms)

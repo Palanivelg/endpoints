@@ -29,6 +29,7 @@ from inference_endpoint.dataset_manager.transforms import (
     FusedRowProcessor,
     MakeAdapterCompatible,
     RowProcessor,
+    SchemaAwareColumnFilter,
     Transform,
     UserPromptFormatter,
     apply_transforms,
@@ -740,6 +741,139 @@ class TestColumnFilter:
         assert "col1" in result.columns
         assert "col2" not in result.columns
         assert len(result) == 0
+
+    @pytest.mark.unit
+    def test_double_apply_does_not_accumulate_columns(self):
+        """Reusing one ColumnFilter instance must not mutate required_columns.
+
+        Regression guard: with in-place `+=` on self.required_columns, the found
+        optional columns leak into required_columns, so a second apply keeps (and
+        duplicates) columns from the first frame.
+        """
+        transform = ColumnFilter(
+            required_columns=["keep"],
+            optional_columns=["opt_a", "opt_b"],
+        )
+
+        df1 = pd.DataFrame({"keep": [1], "opt_a": [2], "drop": [3]})
+        result1 = transform(df1)
+        assert list(result1.columns) == ["keep", "opt_a"]
+
+        # required_columns is untouched by the first apply.
+        assert transform.required_columns == ["keep"]
+
+        # A second apply on a frame with a different optional present must not
+        # carry over "opt_a" from the first frame.
+        df2 = pd.DataFrame({"keep": [4], "opt_b": [5], "drop": [6]})
+        result2 = transform(df2)
+        assert list(result2.columns) == ["keep", "opt_b"]
+        assert transform.required_columns == ["keep"]
+
+
+class TestSchemaAwareColumnFilter:
+    """Test suite for SchemaAwareColumnFilter transform."""
+
+    pytestmark = pytest.mark.unit
+
+    def test_prompt_schema_projection(self):
+        """A prompt-schema frame keeps prompt + present optionals, drops extras."""
+        df = pd.DataFrame(
+            {"prompt": ["hi"], "system": ["sys"], "extra": ["x"], "model": ["m"]}
+        )
+        transform = SchemaAwareColumnFilter(
+            required_any=[["messages"], ["prompt"]],
+            optional_columns=["system", "messages", "tools", "tool_choice"],
+        )
+        result = transform(df)
+        assert list(result.columns) == ["prompt", "system"]
+
+    def test_messages_schema_projection(self):
+        """A messages-schema frame keeps messages + tools + tool_choice."""
+        df = pd.DataFrame(
+            {
+                "messages": [[{"role": "user", "content": "hi"}]],
+                "tools": [[{"type": "function"}]],
+                "tool_choice": ["auto"],
+                "extra": ["x"],
+            }
+        )
+        transform = SchemaAwareColumnFilter(
+            required_any=[["messages"], ["prompt"]],
+            optional_columns=["system", "messages", "tools", "tool_choice"],
+        )
+        result = transform(df)
+        assert list(result.columns) == ["messages", "tools", "tool_choice"]
+
+    def test_messages_preferred_when_both_present(self):
+        """When both schemas are present, the earlier group (messages) wins."""
+        df = pd.DataFrame(
+            {
+                "messages": [[{"role": "user", "content": "hi"}]],
+                "prompt": ["hi"],
+            }
+        )
+        transform = SchemaAwareColumnFilter(
+            required_any=[["messages"], ["prompt"]],
+            optional_columns=["prompt"],
+        )
+        result = transform(df)
+        # messages group chosen; "prompt" is present as optional and kept, but
+        # the chosen schema column comes first.
+        assert result.columns[0] == "messages"
+
+    def test_optional_overlapping_chosen_group_not_duplicated(self):
+        """An optional column that is also in the chosen group is not duplicated."""
+        df = pd.DataFrame(
+            {
+                "messages": [[{"role": "user", "content": "hi"}]],
+                "tools": [[]],
+            }
+        )
+        transform = SchemaAwareColumnFilter(
+            required_any=[["messages"], ["prompt"]],
+            optional_columns=["messages", "tools"],
+        )
+        result = transform(df)
+        assert list(result.columns) == ["messages", "tools"]
+
+    def test_no_group_present_raises_naming_columns(self):
+        """Neither schema present raises a clear error naming the frame columns."""
+        df = pd.DataFrame({"foo": [1], "bar": [2]})
+        transform = SchemaAwareColumnFilter(
+            required_any=[["messages"], ["prompt"]],
+        )
+        with pytest.raises(ValueError, match="required column group"):
+            transform(df)
+        # The error names the actual frame columns to aid debugging.
+        with pytest.raises(ValueError, match="bar"):
+            transform(df)
+
+    def test_partial_group_not_matched(self):
+        """A group only partially present does not match."""
+        df = pd.DataFrame({"messages": [[]], "tools": [[]]})
+        transform = SchemaAwareColumnFilter(
+            required_any=[["messages", "prompt"]],
+        )
+        with pytest.raises(ValueError, match="required column group"):
+            transform(df)
+
+    def test_empty_required_any_raises(self):
+        """Constructing with an empty group list is rejected."""
+        with pytest.raises(ValueError, match="non-empty"):
+            SchemaAwareColumnFilter(required_any=[])
+        with pytest.raises(ValueError, match="non-empty"):
+            SchemaAwareColumnFilter(required_any=[[]])
+
+    def test_reuse_across_schemas_is_stateless(self):
+        """One instance projects each frame by its own schema (no leaked state)."""
+        transform = SchemaAwareColumnFilter(
+            required_any=[["messages"], ["prompt"]],
+            optional_columns=["system", "tools", "tool_choice"],
+        )
+        msg_df = pd.DataFrame({"messages": [[]], "tools": [[]]})
+        prompt_df = pd.DataFrame({"prompt": ["hi"], "system": ["s"]})
+        assert list(transform(msg_df).columns) == ["messages", "tools"]
+        assert list(transform(prompt_df).columns) == ["prompt", "system"]
 
 
 class TestMakeAdapterCompatible:
